@@ -5,6 +5,7 @@ const font = require('oled-font-5x7');
 const moment = require('moment');
 const os = require('os');
 const Gpio = require('onoff').Gpio;
+const statusText = "";
 
 const buttons = {
   center: new Gpio(2, 'in', 'both'),
@@ -84,6 +85,12 @@ function drawTime () {
 ['center', 'up', 'left', 'right', 'down'].forEach((key) => {
   buttons[key].watch((err, value) => {
     console.log(key, err, value);
+    oled.setCursor(0,23);
+    oled.writeString(font, 1, '       ', 1, false);
+    if (value === 0) {
+      oled.setCursor(0,23);
+      oled.writeString(font, 1, key, 1, false);
+    }
   });
 });
 
