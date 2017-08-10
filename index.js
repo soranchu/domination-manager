@@ -1,11 +1,14 @@
-const SerialPort = require('serialport');
 const awsIot = require('aws-iot-device-sdk');
 const Oled = require('oled-spi');
 const font = require('oled-font-5x7');
 const moment = require('moment');
 const os = require('os');
 const Gpio = require('onoff').Gpio;
-const statusText = "";
+const Im920 = require('./im920');
+const statusList = [];
+const mergedStatus = {};
+
+const im = new Im920('/dev/ttyS0');
 
 const buttons = {
   center: new Gpio(2, 'in', 'both'),
@@ -14,15 +17,19 @@ const buttons = {
   left: new Gpio(17, 'in', 'both'),
   down: new Gpio(3, 'in', 'both')
 };
+const buzzer = new Gpio(25, 'out');
+buzzer.writeSync(1);
+
 process.on('SIGINT', function () {
   buttons.center.unexport();
   buttons.up.unexport();
   buttons.left.unexport();
   buttons.right.unexport();
   buttons.down.unexport();
+  buzzer.unexport();
+  process.exit();
 });
 
-let uartBuffer = '';
 let ctrl = {
   pauseStatusUpload: false,
   started: false,
@@ -38,6 +45,7 @@ var opts = {
 var oled = new Oled(opts);
 oled.begin(function(){
   console.log('oled init');
+  buzzer.writeSync(0);
   // do cool oled things here
   oled.clearDisplay();
   oled.turnOnDisplay();
@@ -77,8 +85,21 @@ function drawTime () {
   }
   st = !st;
   let ip = getAddr() || '0.0.0.0';
-  oled.setCursor(0,15);
+  oled.setCursor(0,56);
   oled.writeString(font, 1, `IP:${ip}`, 1, true);
+
+  mergedStatus.red = 0;
+  mergedStatus.yellow = 0;
+  statusList.forEach((s) => {
+    if (s && s.teams) {
+      mergedStatus.red += s.teams.red.point;
+      mergedStatus.yellow += s.teams.yellow.point;
+    }
+  });
+  let rp = zeroPadding(Math.floor(mergedStatus.red/5), 4);
+  let yp = zeroPadding(Math.floor(mergedStatus.yellow/5), 4);
+  oled.setCursor(0,15);
+  oled.writeString(font, 1, `RED: ${rp} YEL: ${yp}`, false);
   wait(1000).then(drawTime);
 }
 
@@ -90,51 +111,74 @@ function drawTime () {
     if (value === 0) {
       oled.setCursor(0,23);
       oled.writeString(font, 1, key, 1, false);
+      exec(key);
     }
   });
 });
 
-const shadow = awsIot.thingShadow({
-   keyPath: 'certs/domination-manager.private.key',
-  certPath: 'certs/domination-manager.cert.pem',
-    caPath: 'certs/root-CA.crt',
-  clientId: 'domination-manager',
-      host: 'a3vm3lk3ajo7lu.iot.ap-northeast-1.amazonaws.com'
-});
-
-const uart = new SerialPort('/dev/ttyS0', {
-  baudRate: 19200
-}, (err) => {
-  if (err) {
-    return console.log('Error: ', err.message);
+function exec (key) {
+  switch(key) {
+    case 'center':
+      im.txData('01'); // game start
+      im.txData('01'); // game start
+      im.txData('01'); // game start
+      break;
+    case 'up':
+      im.txData('02'); // game pause
+      im.txData('02'); // game pause
+      im.txData('02'); // game pause
+      break;
+    case 'down':
+      im.txData('09'); // game reset
+      im.txData('09'); // game reset
+      im.txData('09'); // game reset
+      break;
   }
-});
+}
+function zeroPadding(number, length){
+  return number.toLocaleString( "ja-JP", {useGrouping: false , minimumIntegerDigits: length});
+}
 
-uart.write('RDNN\r\n', function(err) {
-  if (err) {
-    return console.log('Error on write: ', err.message);
+im.onDataReceived((data) => {
+  let status = parseUart(data);
+  if (!status) return;
+  let base = 31;
+  let id = 0;
+  switch (status.no) {
+     case '02': id = 0; base = 31; break; 
+     case '03': id = 1; base = 31 + 8; break; 
+     case '08': id = 2; base = 31 + 16; break; 
   }
-  console.log('message written');
-});
+  statusList[id] = status;
+  oled.fillRect(0, base, 127, 8, 0);
+  
+  let current = '_';
+  if (status.currentColor === '00') current = 'R';
+  if (status.currentColor === '01') current = 'Y';
 
-uart.on('data', (data) => {
-//  console.log(`[UART] received: "${data}"`);
-  uartBuffer += data;
-  let lines = uartBuffer.split(/\r\n/);
-
-  if (lines.length === 1) { // no crlf
-    return;
+  if (status.started) {
+    oled.drawPixel([
+      [0, base + 1, 1], [1, base + 1, 0], [2, base + 1, 0], [3, base + 1, 0], [4, base + 1, 0],
+      [0, base + 2, 1], [1, base + 2, 1], [2, base + 2, 1], [3, base + 2, 0], [4, base + 2, 0],
+      [0, base + 3, 1], [1, base + 3, 1], [2, base + 3, 1], [3, base + 3, 1], [4, base + 3, 1],
+      [0, base + 4, 1], [1, base + 4, 1], [2, base + 4, 1], [3, base + 4, 0], [4, base + 4, 0],
+      [0, base + 5, 1], [1, base + 5, 0], [2, base + 5, 0], [3, base + 5, 0], [4, base + 5, 0],
+    ]);
+  } else {
+    oled.drawPixel([
+      [0, base + 1, 1], [1, base + 1, 1], [2, base + 1, 1], [3, base + 1, 1], [4, base + 1, 1],
+      [0, base + 2, 1], [1, base + 2, 1], [2, base + 2, 1], [3, base + 2, 1], [4, base + 2, 1],
+      [0, base + 3, 1], [1, base + 3, 1], [2, base + 3, 1], [3, base + 3, 1], [4, base + 3, 1],
+      [0, base + 4, 1], [1, base + 4, 1], [2, base + 4, 1], [3, base + 4, 1], [4, base + 4, 1],
+      [0, base + 5, 1], [1, base + 5, 1], [2, base + 5, 1], [3, base + 5, 1], [4, base + 5, 1],
+    ]);
   }
-  for (var i = 0; i < lines.length - 1; ++i) {
-    console.log(`[UART] message:${lines[i]}`);
-    let status = parseUart(lines[i]);
-    if (status) {
-      publishStatus(status);
-    }
-  }
-  uartBuffer = lines[lines.length - 1];
+  oled.setCursor(8,base);
+  let rp = zeroPadding(Math.floor(status.teams.red.point/5), 4);
+  let yp = zeroPadding(Math.floor(status.teams.yellow.point/5), 4);
+  oled.writeString(font, 1, `${id}:${current} R:${rp} Y:${yp}`, 1, false);
+    
 });
-
 function fromHex (str) {
   if (Array.isArray(str)) {
     let s = '0x';
@@ -146,11 +190,8 @@ function fromHex (str) {
     return parseInt('0x' + str);
   }
 }
+
 function parseUart (data) {
-  if (data.indexOf('OK') === 0 || data.indexOf('NG') === 0) {
-    // TODO
-    return;
-  }
   let t = data.split(':');
   if (t.length === 1) {
     // TODO 
@@ -165,24 +206,30 @@ function parseUart (data) {
     no: headers[0],
     id: headers[1],
     rssi: fromHex(headers[2]) - 0x100,
-    body: {
-      currentColor: body[0],
-      teams: {
-        red: {
-          tags: fromHex(body[1]),
-          point: fromHex([body[3], body[4]])
-        },
-        yellow: {
-          tags: fromHex(body[2]),
-          point: fromHex([body[5], body[6]])
-        }
+    currentColor: body[0],
+    teams: {
+      red: {
+        tags: fromHex(body[1]),
+        point: fromHex([body[3], body[4]])
       },
-      started: body[7] !== '00',
-      clock: fromHex([body[8], body[9], body[10], body[11]])
-    }
+      yellow: {
+        tags: fromHex(body[2]),
+        point: fromHex([body[5], body[6]])
+      }
+    },
+    started: body[7] !== '00',
+    clock: fromHex([body[8], body[9], body[10], body[11]])
   };
   return out;
 }
+
+const shadow = awsIot.thingShadow({
+   keyPath: 'certs/domination-manager.private.key',
+  certPath: 'certs/domination-manager.cert.pem',
+    caPath: 'certs/root-CA.crt',
+  clientId: 'domination-manager',
+      host: 'a3vm3lk3ajo7lu.iot.ap-northeast-1.amazonaws.com'
+});
 
 function publishStatus (status) {
   shadow.update('domination-manager', {state: {reported: status}});
