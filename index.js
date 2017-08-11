@@ -1,13 +1,29 @@
+const authToken = '481543597758447bad554dba0e48fb06';
 const awsIot = require('aws-iot-device-sdk');
 const Oled = require('oled-spi');
 const font = require('oled-font-5x7');
 const moment = require('moment');
+require("moment-duration-format");
 const os = require('os');
+const ChildProcess = require('child_process');
 const Gpio = require('onoff').Gpio;
 const Im920 = require('./im920');
-const statusList = [];
-const mergedStatus = {};
+const BlynkLib = require('blynk-library');
+const blynk = new BlynkLib.Blynk(authToken)
 
+const gameStatus = {
+  totalSeconds: 60 * 7,
+  remainingMs: 0,
+  started: false,
+  redScore: 0,
+  yellowScore: 0,
+  nodes: []
+};
+gameStatus.remainingMs = gameStatus.totalSeconds * 1000;
+
+let lastTimestamp = 0;
+let uiMode = 0;
+let gameControlState = 'PAUSE';
 const im = new Im920('/dev/ttyS0');
 
 const buttons = {
@@ -18,7 +34,6 @@ const buttons = {
   down: new Gpio(3, 'in', 'both')
 };
 const buzzer = new Gpio(25, 'out');
-buzzer.writeSync(1);
 
 process.on('SIGINT', function () {
   buttons.center.unexport();
@@ -35,6 +50,39 @@ let ctrl = {
   started: false,
   reset: false
 };
+
+// pin assignment
+const pins = {
+  //game timer
+  timer: new blynk.VirtualPin(0),
+  nodes: [
+    {
+      name: 'Alpha',
+      r: new blynk.WidgetLED(1),
+      y: new blynk.WidgetLED(4)
+    },
+    {
+      name: 'Bravo',
+      r: new blynk.WidgetLED(2),
+      y: new blynk.WidgetLED(5)
+    },
+    {
+      name: 'Charlie',
+      r: new blynk.WidgetLED(3),
+      y: new blynk.WidgetLED(6)
+    }
+  ],
+  redScore: new blynk.VirtualPin(7),
+  yellowScore: new blynk.VirtualPin(10),
+
+  startNewGame: new blynk.VirtualPin(20),
+  finishGame: new blynk.VirtualPin(21),
+
+  gameDuration: new blynk.VirtualPin(9),
+  gameDurationConfig: new blynk.VirtualPin(11),
+
+};
+
 var opts = {
   width: 128,
   height: 64,
@@ -43,6 +91,7 @@ var opts = {
 };
 
 var oled = new Oled(opts);
+buzzer.writeSync(1);
 oled.begin(function(){
   console.log('oled init');
   buzzer.writeSync(0);
@@ -74,67 +123,210 @@ function getAddr () {
   return ip;
 }
 
+function getApName () {
+  try {
+    let ap = ChildProcess.execSync('iwgetid -r').toString();
+    return ap;
+  } catch (e) {
+    console.error(`get AP failed: ${e}`);
+    return null;
+  }
+}
+
 let st = false;
 function drawTime () {
-  let m = moment();
+  updateStatus();
+
+  let m = moment.duration(gameStatus.remainingMs);
   oled.setCursor(0,0);
+  oled.fillRect(0, 0, 128, 24, 0);
   if (st) {
-    oled.writeString(font, 2, m.format('HH:mm:ss'), 1, false);
+    oled.writeString(font, 2, m.format('mm:ss', {trim: false}), 1, false);
   } else {
-    oled.writeString(font, 2, m.format('HH:mm:ss.'), 1, false);
+    oled.writeString(font, 2, m.format('mm:ss.', {trim: false}), 1, false);
   }
   st = !st;
-  let ip = getAddr() || '0.0.0.0';
-  oled.setCursor(0,56);
-  oled.writeString(font, 1, `IP:${ip}`, 1, true);
+  oled.setCursor(90,0);
+  oled.writeString(font, 1, gameControlState, 1, false);
 
-  mergedStatus.red = 0;
-  mergedStatus.yellow = 0;
-  statusList.forEach((s) => {
+  oled.setCursor(0, 56);
+  oled.fillRect(0, 56, 128, 8, 0);
+  switch (uiMode) {
+    case 0: //ip
+    { 
+      let ip = getAddr() || '0.0.0.0';
+      oled.writeString(font, 1, `IP:${ip}`, 1, false);
+      break;
+    }
+    case 1: // ap
+    {
+      let ap = getApName();
+      oled.writeString(font, 1, `AP:${ap}`, 1, false);
+      break;
+    }
+    case 2: // rssi
+    {
+      let s = gameStatus.nodes;
+      let rssi = [];
+      for (let i = 0; i < 3; ++i) {
+        rssi[i] = s[i] ? s[i].rssi : '-NA';
+      }
+      oled.writeString(font, 1, `A${rssi[0]} B${rssi[1]} C${rssi[2]}`, 1, false);
+      break;
+    }
+  }
+  let rp = zeroPadding(Math.floor(gameStatus.redScore/5), 4);
+  let yp = zeroPadding(Math.floor(gameStatus.yellowScore/5), 4);
+  oled.setCursor(1,16);
+  oled.writeString(font, 1, `SUM: R:${rp} Y:${yp}`, false);
+  wait(1000).then(drawTime);
+}
+
+function updateStatus () {
+  let redScore = 0;
+  let yellowScore = 0;
+  let current = new Date().getTime();
+  let diff = current - lastTimestamp;
+
+  gameStatus.nodes.forEach((s) => {
     if (s && s.teams) {
-      mergedStatus.red += s.teams.red.point;
-      mergedStatus.yellow += s.teams.yellow.point;
+      redScore += s.teams.red.point;
+      yellowScore += s.teams.yellow.point;
     }
   });
-  let rp = zeroPadding(Math.floor(mergedStatus.red/5), 4);
-  let yp = zeroPadding(Math.floor(mergedStatus.yellow/5), 4);
-  oled.setCursor(0,15);
-  oled.writeString(font, 1, `RED: ${rp} YEL: ${yp}`, false);
-  wait(1000).then(drawTime);
+  gameStatus.redScore = redScore;
+  gameStatus.yellowScore = yellowScore;
+  if (gameStatus.started) {
+    if (gameStatus.remainingMs - diff <= 0) {
+      let winner = (redScore > yellowScore) ? 'RED' : 'YELLOW';
+      gameFinish(winner);
+    } else {
+      gameStatus.remainingMs -= diff;
+    }
+  }
+  lastTimestamp = current;
+
+  sendStatusToNodes();
+
+  let ts = moment.duration(gameStatus.remainingMs).format("mm:ss", { trim: false });
+  pins.timer.write(ts);
+  gameStatus.nodes.forEach((n, i) => {
+    switch(n.currentColor) {
+      case '00': //red
+        pins.nodes[i].r.turnOn();
+        pins.nodes[i].y.turnOff();
+        break;
+      case '01': //yel
+        pins.nodes[i].r.turnOff();
+        pins.nodes[i].y.turnOn();
+        break;
+      default:
+        pins.nodes[i].r.turnOff();
+        pins.nodes[i].y.turnOff();
+        break;
+    }
+  });
+  pins.redScore.write(Math.floor(gameStatus.redScore/5));
+  pins.yellowScore.write(Math.floor(gameStatus.yellowScore/5));
 }
 
 ['center', 'up', 'left', 'right', 'down'].forEach((key) => {
   buttons[key].watch((err, value) => {
+    buzzer.writeSync(0);
     console.log(key, err, value);
-    oled.setCursor(0,23);
-    oled.writeString(font, 1, '       ', 1, false);
     if (value === 0) {
-      oled.setCursor(0,23);
-      oled.writeString(font, 1, key, 1, false);
       exec(key);
     }
   });
 });
 
 function exec (key) {
+  let msg = null;
   switch(key) {
     case 'center':
-      im.txData('01'); // game start
-      im.txData('01'); // game start
-      im.txData('01'); // game start
+      msg = 'start';
       break;
     case 'up':
-      im.txData('02'); // game pause
-      im.txData('02'); // game pause
-      im.txData('02'); // game pause
+      msg = 'pause';
       break;
     case 'down':
-      im.txData('09'); // game reset
-      im.txData('09'); // game reset
-      im.txData('09'); // game reset
+      msg = 'reset';
+      break;
+    case 'right':
+      if (uiMode >= 2) uiMode = 0;
+      else uiMode++;
+      break;
+    case 'left':
+      if (uiMode === 0) uiMode = 2;
+      else uiMode--;
       break;
   }
+  if (msg) {
+    gameControl(msg);
+  }
 }
+
+function gameControl (state) {
+  switch(state) {
+    case 'start':
+      gameControlState = 'START';
+      im.txData('01'); // game start
+      //im.txData('01'); // game start
+      //im.txData('01'); // game start
+      gameStatus.started = true;
+      lastTimestamp = new Date().getTime();
+      break;
+    case 'pause':
+      gameControlState = 'PAUSE';
+      im.txData('02'); // game pause
+      //im.txData('02'); // game pause
+      //im.txData('02'); // game pause
+      gameStatus.started = false;
+      break;
+    case 'reset':
+      gameControlState = 'RESET';
+      im.txData('09'); // game reset
+      //im.txData('09'); // game reset
+      //im.txData('09'); // game reset
+      gameStatus.remainingMs = 1000 * gameStatus.totalSeconds;
+      gameStatus.started = false;
+      let ts = moment.duration(gameStatus.remainingMs).format("mm:ss", { trim: false });
+      pins.timer.write(ts);
+      pins.nodes.forEach((n) => {
+        n.r.turnOff();
+        n.y.turnOff();
+      });
+      pins.redScore.write(0);
+      pins.yellowScore.write(0);
+      break;
+  }
+  oled.setCursor(90,0);
+  oled.fillRect(90, 0, 38, 8);
+  oled.writeString(font, 1, gameControlState, 1, false);
+}
+
+function gameStart () {
+  gameControl('start');
+}
+
+function gamePause () {
+  gameControl('pause');
+}
+
+function gameReset () {
+  gameControl('reset');
+}
+
+function gameFinish (team) {
+  gameControl('pause');
+  gameStatus.remainingMs = 0;
+  buzzer.writeSync(1);
+  wait(10*1000).then(() => {
+    buzzer.writeSync(0);
+  });
+  blynk.notify('game finished! '+ team +' wins.');
+}
+
 function zeroPadding(number, length){
   return number.toLocaleString( "ja-JP", {useGrouping: false , minimumIntegerDigits: length});
 }
@@ -144,12 +336,13 @@ im.onDataReceived((data) => {
   if (!status) return;
   let base = 31;
   let id = 0;
+  let key = '';
   switch (status.no) {
-     case '02': id = 0; base = 31; break; 
-     case '03': id = 1; base = 31 + 8; break; 
-     case '08': id = 2; base = 31 + 16; break; 
+     case '02': id = 0; key = 'A'; base = 31; break; 
+     case '03': id = 1; key = 'B'; base = 31 + 8; break; 
+     case '08': id = 2; key = 'C'; base = 31 + 16; break; 
   }
-  statusList[id] = status;
+  gameStatus.nodes[id] = status;
   oled.fillRect(0, base, 127, 8, 0);
   
   let current = '_';
@@ -176,7 +369,7 @@ im.onDataReceived((data) => {
   oled.setCursor(8,base);
   let rp = zeroPadding(Math.floor(status.teams.red.point/5), 4);
   let yp = zeroPadding(Math.floor(status.teams.yellow.point/5), 4);
-  oled.writeString(font, 1, `${id}:${current} R:${rp} Y:${yp}`, 1, false);
+  oled.writeString(font, 1, `${key}:${current} R:${rp} Y:${yp}`, 1, false);
     
 });
 function fromHex (str) {
@@ -191,6 +384,20 @@ function fromHex (str) {
   }
 }
 
+function sendStatusToNodes () {
+  let b = new Buffer(10);
+  b[0] = 0x00; // CMD_SEND_STATUS
+  b.writeUInt32LE(gameStatus.remainingMs, 1); // 1-4
+  b.writeUInt16LE(gameStatus.redScore, 5); // 5-6
+  b.writeUInt16LE(gameStatus.yellowScore, 7); // 7-8
+  switch (gameControlState) {
+    case 'START': b[9] = 0x01; break;
+    case 'PAUSE': b[9] = 0x02; break;
+    case 'RESET': b[9] = 0x09; break;
+  }
+  im.txData(b.toString('hex'));
+}
+
 function parseUart (data) {
   let t = data.split(':');
   if (t.length === 1) {
@@ -199,7 +406,7 @@ function parseUart (data) {
   }
   let headers = t[0].split(',');
   let body = t[1].split(',');
-  if (body.length < 12) {
+  if (body.length < 8) {
     return;
   }
   let out = {
@@ -218,7 +425,7 @@ function parseUart (data) {
       }
     },
     started: body[7] !== '00',
-    clock: fromHex([body[8], body[9], body[10], body[11]])
+    //clock: fromHex([body[8], body[9], body[10], body[11]])
   };
   return out;
 }
