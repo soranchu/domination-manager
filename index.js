@@ -200,8 +200,13 @@ function updateStatus () {
   gameStatus.yellowScore = yellowScore;
   if (gameStatus.started) {
     if (gameStatus.remainingMs - diff <= 0) {
-      let winner = (redScore > yellowScore) ? 'RED' : 'YELLOW';
-      gameFinish(winner);
+      if (redScore == yellowScore){
+        let notifyMessage = 'game was draw!!!';
+      }else{
+        let winner = (redScore > yellowScore) ? 'RED' : 'YELLOW';
+        let notifyMessage = 'game finished! '+ team +' wins.';
+      }
+      gameFinish(notifyMessage);
     } else {
       gameStatus.remainingMs -= diff;
     }
@@ -319,14 +324,14 @@ function gameReset () {
   gameControl('reset');
 }
 
-function gameFinish (team) {
+function gameFinish (notifyMessage) {
   gameControl('pause');
   gameStatus.remainingMs = 0;
   buzzer.writeSync(1);
   wait(10*1000).then(() => {
     buzzer.writeSync(0);
   });
-  blynk.notify('game finished! '+ team +' wins.');
+  blynk.notify(notifyMessage);
 }
 
 function zeroPadding(number, length){
