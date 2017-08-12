@@ -76,10 +76,12 @@ const pins = {
   yellowScore: new blynk.VirtualPin(10),
 
   startNewGame: new blynk.VirtualPin(20),
-  finishGame: new blynk.VirtualPin(21),
+  resetGame: new blynk.VirtualPin(21),
+  pauseGame: new blynk.VirtualPin(12),
 
-  gameDuration: new blynk.VirtualPin(9),
-  gameDurationConfig: new blynk.VirtualPin(11),
+  //TODO: NOT implemeted
+  // gameDuration: new blynk.VirtualPin(9),
+  // gameDurationConfig: new blynk.VirtualPin(11),
 
 };
 
@@ -198,8 +200,13 @@ function updateStatus () {
   gameStatus.yellowScore = yellowScore;
   if (gameStatus.started) {
     if (gameStatus.remainingMs - diff <= 0) {
-      let winner = (redScore > yellowScore) ? 'RED' : 'YELLOW';
-      gameFinish(winner);
+      if (redScore == yellowScore){
+        let notifyMessage = 'game was draw!!!';
+      }else{
+        let winner = (redScore > yellowScore) ? 'RED' : 'YELLOW';
+        let notifyMessage = 'game finished! '+ team +' wins.';
+      }
+      gameFinish(notifyMessage);
     } else {
       gameStatus.remainingMs -= diff;
     }
@@ -317,14 +324,14 @@ function gameReset () {
   gameControl('reset');
 }
 
-function gameFinish (team) {
+function gameFinish (notifyMessage) {
   gameControl('pause');
   gameStatus.remainingMs = 0;
   buzzer.writeSync(1);
   wait(10*1000).then(() => {
     buzzer.writeSync(0);
   });
-  blynk.notify('game finished! '+ team +' wins.');
+  blynk.notify(notifyMessage);
 }
 
 function zeroPadding(number, length){
@@ -538,3 +545,27 @@ shadow.on('timeout',
     //
   }
 );
+
+//UI component bindings
+//
+pins.startNewGame.on('write', function(){
+  gameStart();
+});
+
+pins.resetGame.on('write', function(){
+  gameReset();
+});
+
+pins.pauseGame.on('write', function(param){
+  if(!gameStatus.started){
+    console.log('you cannot pause before game start!');
+    return;
+  }
+  if(param == 0){
+    console.log('game resume');
+    gameStart();
+  }else if(param == 1){
+    console.log('game pause');
+    gamePause();
+  }
+});
