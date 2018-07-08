@@ -137,6 +137,14 @@ function getApName () {
 
 let st = false;
 function drawTime () {
+  if (centerPressedAt) {
+    let duration = moment() - centerPressedAt;
+    if (duration > 5000) {
+      buzzer.writeSync(1);
+      console.log('shutdown!');
+      ChildProcess.execSync('sudo shutdown -h now');
+    }
+  }
   updateStatus();
 
   let m = moment.duration(gameStatus.remainingMs);
@@ -238,23 +246,20 @@ function updateStatus () {
   pins.yellowScore.write(Math.floor(gameStatus.yellowScore / 5));
 }
 
-let centerPressedAt = 0;
+let centerPressedAt = null;
 
 ['center', 'up', 'left', 'right', 'down'].forEach((key) => {
   buttons[key].watch((err, value) => {
-    buzzer.writeSync(1);
     buzzer.writeSync(0);
     console.log(key, err, value);
     if (value === 0) { // keydown
       if (key === 'center') {
         centerPressedAt = moment();
-        console.log('centerPressed:', centerPressedAt);
       }
       exec(key);
     } else { // keyup
       if (key === 'center') {
-        let duration = moment() - centerPressedAt;
-        console.log('pressed duration:', duration);
+        centerPressedAt = null;
       }
     }
   });
