@@ -238,12 +238,24 @@ function updateStatus () {
   pins.yellowScore.write(Math.floor(gameStatus.yellowScore / 5));
 }
 
+let centerPressedAt = 0;
+
 ['center', 'up', 'left', 'right', 'down'].forEach((key) => {
   buttons[key].watch((err, value) => {
+    buzzer.writeSync(1);
     buzzer.writeSync(0);
     console.log(key, err, value);
-    if (value === 0) {
+    if (value === 0) { // keydown
+      if (key === 'center') {
+        centerPressedAt = moment();
+        console.log('centerPressed:', centerPressedAt);
+      }
       exec(key);
+    } else { // keyup
+      if (key === 'center') {
+        let duration = moment() - centerPressedAt;
+        console.log('pressed duration:', duration);
+      }
     }
   });
 });
