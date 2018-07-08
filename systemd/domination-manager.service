@@ -1,0 +1,17 @@
+[Unit]
+Description=Domination Manager
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/domination-manager
+ExecStart=/usr/local/nodejs/bin/node index.js
+Restart=always
+RestartSec=2
+User=pi
+Group=pi
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=domination-manager
+# Environment=NODE_ENV=production PORT=3000
+[Install]
+WantedBy=multi-user.target
