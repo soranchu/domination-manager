@@ -1,15 +1,15 @@
 const authToken = '481543597758447bad554dba0e48fb06';
-const awsIot = require('aws-iot-device-sdk');
+// const awsIot = require('aws-iot-device-sdk');
 const Oled = require('oled-spi');
 const font = require('oled-font-5x7');
 const moment = require('moment');
-require("moment-duration-format");
+require('moment-duration-format');
 const os = require('os');
 const ChildProcess = require('child_process');
 const Gpio = require('onoff').Gpio;
 const Im920 = require('./im920');
 const BlynkLib = require('blynk-library');
-const blynk = new BlynkLib.Blynk(authToken)
+const blynk = new BlynkLib.Blynk(authToken);
 
 const gameStatus = {
   totalSeconds: 60 * 7,
@@ -45,15 +45,15 @@ process.on('SIGINT', function () {
   process.exit();
 });
 
-let ctrl = {
-  pauseStatusUpload: false,
-  started: false,
-  reset: false
-};
+// let ctrl = {
+//   pauseStatusUpload: false,
+//   started: false,
+//   reset: false
+// };
 
 // pin assignment
 const pins = {
-  //game timer
+  // game timer
   timer: new blynk.VirtualPin(0),
   nodes: [
     {
@@ -77,9 +77,9 @@ const pins = {
 
   startNewGame: new blynk.VirtualPin(20),
   resetGame: new blynk.VirtualPin(21),
-  pauseGame: new blynk.VirtualPin(12),
+  pauseGame: new blynk.VirtualPin(12)
 
-  //TODO: NOT implemeted
+  // TODO: NOT implemeted
   // gameDuration: new blynk.VirtualPin(9),
   // gameDurationConfig: new blynk.VirtualPin(11),
 
@@ -89,12 +89,12 @@ var opts = {
   width: 128,
   height: 64,
   dcPin: 23,
-  rstPin : 24
+  rstPin: 24
 };
 
 var oled = new Oled(opts);
 buzzer.writeSync(1);
-oled.begin(function(){
+oled.begin(function () {
   console.log('oled init');
   buzzer.writeSync(0);
   // do cool oled things here
@@ -140,7 +140,7 @@ function drawTime () {
   updateStatus();
 
   let m = moment.duration(gameStatus.remainingMs);
-  oled.setCursor(0,0);
+  oled.setCursor(0, 0);
   oled.fillRect(0, 0, 128, 24, 0);
   if (st) {
     oled.writeString(font, 2, m.format('mm:ss', {trim: false}), 1, false);
@@ -148,14 +148,14 @@ function drawTime () {
     oled.writeString(font, 2, m.format('mm:ss.', {trim: false}), 1, false);
   }
   st = !st;
-  oled.setCursor(90,0);
+  oled.setCursor(90, 0);
   oled.writeString(font, 1, gameControlState, 1, false);
 
   oled.setCursor(0, 56);
   oled.fillRect(0, 56, 128, 8, 0);
   switch (uiMode) {
-    case 0: //ip
-    { 
+    case 0: // ip
+    {
       let ip = getAddr() || '0.0.0.0';
       oled.writeString(font, 1, `IP:${ip}`, 1, false);
       break;
@@ -177,9 +177,9 @@ function drawTime () {
       break;
     }
   }
-  let rp = zeroPadding(Math.floor(gameStatus.redScore/5), 4);
-  let yp = zeroPadding(Math.floor(gameStatus.yellowScore/5), 4);
-  oled.setCursor(1,16);
+  let rp = zeroPadding(Math.floor(gameStatus.redScore / 5), 4);
+  let yp = zeroPadding(Math.floor(gameStatus.yellowScore / 5), 4);
+  oled.setCursor(1, 16);
   oled.writeString(font, 1, `SUM: R:${rp} Y:${yp}`, false);
   wait(1000).then(drawTime);
 }
@@ -200,11 +200,12 @@ function updateStatus () {
   gameStatus.yellowScore = yellowScore;
   if (gameStatus.started) {
     if (gameStatus.remainingMs - diff <= 0) {
-      if (redScore == yellowScore){
-        let notifyMessage = 'game was draw!!!';
-      }else{
+      let notifyMessage;
+      if (redScore === yellowScore) {
+        notifyMessage = 'game was draw!!!';
+      } else {
         let winner = (redScore > yellowScore) ? 'RED' : 'YELLOW';
-        let notifyMessage = 'game finished! '+ team +' wins.';
+        notifyMessage = 'game finished! ' + winner + ' wins.';
       }
       gameFinish(notifyMessage);
     } else {
@@ -215,15 +216,15 @@ function updateStatus () {
 
   sendStatusToNodes();
 
-  let ts = moment.duration(gameStatus.remainingMs).format("mm:ss", { trim: false });
+  let ts = moment.duration(gameStatus.remainingMs).format('mm:ss', { trim: false });
   pins.timer.write(ts);
   gameStatus.nodes.forEach((n, i) => {
-    switch(n.currentColor) {
-      case '00': //red
+    switch (n.currentColor) {
+      case '00': // red
         pins.nodes[i].r.turnOn();
         pins.nodes[i].y.turnOff();
         break;
-      case '01': //yel
+      case '01': // yel
         pins.nodes[i].r.turnOff();
         pins.nodes[i].y.turnOn();
         break;
@@ -233,8 +234,8 @@ function updateStatus () {
         break;
     }
   });
-  pins.redScore.write(Math.floor(gameStatus.redScore/5));
-  pins.yellowScore.write(Math.floor(gameStatus.yellowScore/5));
+  pins.redScore.write(Math.floor(gameStatus.redScore / 5));
+  pins.yellowScore.write(Math.floor(gameStatus.yellowScore / 5));
 }
 
 ['center', 'up', 'left', 'right', 'down'].forEach((key) => {
@@ -249,7 +250,7 @@ function updateStatus () {
 
 function exec (key) {
   let msg = null;
-  switch(key) {
+  switch (key) {
     case 'center':
       msg = 'start';
       break;
@@ -274,30 +275,30 @@ function exec (key) {
 }
 
 function gameControl (state) {
-  switch(state) {
+  switch (state) {
     case 'start':
       gameControlState = 'START';
       im.txData('01'); // game start
-      //im.txData('01'); // game start
-      //im.txData('01'); // game start
+      // im.txData('01'); // game start
+      // im.txData('01'); // game start
       gameStatus.started = true;
       lastTimestamp = new Date().getTime();
       break;
     case 'pause':
       gameControlState = 'PAUSE';
       im.txData('02'); // game pause
-      //im.txData('02'); // game pause
-      //im.txData('02'); // game pause
+      // im.txData('02'); // game pause
+      // im.txData('02'); // game pause
       gameStatus.started = false;
       break;
     case 'reset':
       gameControlState = 'RESET';
       im.txData('09'); // game reset
-      //im.txData('09'); // game reset
-      //im.txData('09'); // game reset
+      // im.txData('09'); // game reset
+      // im.txData('09'); // game reset
       gameStatus.remainingMs = 1000 * gameStatus.totalSeconds;
       gameStatus.started = false;
-      let ts = moment.duration(gameStatus.remainingMs).format("mm:ss", { trim: false });
+      let ts = moment.duration(gameStatus.remainingMs).format('mm:ss', { trim: false });
       pins.timer.write(ts);
       pins.nodes.forEach((n) => {
         n.r.turnOff();
@@ -307,7 +308,7 @@ function gameControl (state) {
       pins.yellowScore.write(0);
       break;
   }
-  oled.setCursor(90,0);
+  oled.setCursor(90, 0);
   oled.fillRect(90, 0, 38, 8);
   oled.writeString(font, 1, gameControlState, 1, false);
 }
@@ -328,14 +329,14 @@ function gameFinish (notifyMessage) {
   gameControl('pause');
   gameStatus.remainingMs = 0;
   buzzer.writeSync(1);
-  wait(10*1000).then(() => {
+  wait(10 * 1000).then(() => {
     buzzer.writeSync(0);
   });
   blynk.notify(notifyMessage);
 }
 
-function zeroPadding(number, length){
-  return number.toLocaleString( "ja-JP", {useGrouping: false , minimumIntegerDigits: length});
+function zeroPadding (number, length) {
+  return number.toLocaleString('ja-JP', {useGrouping: false, minimumIntegerDigits: length});
 }
 
 im.onDataReceived((data) => {
@@ -345,13 +346,13 @@ im.onDataReceived((data) => {
   let id = 0;
   let key = '';
   switch (status.no) {
-     case '02': id = 0; key = 'A'; base = 31; break; 
-     case '03': id = 1; key = 'B'; base = 31 + 8; break; 
-     case '08': id = 2; key = 'C'; base = 31 + 16; break; 
+    case '02': id = 0; key = 'A'; base = 31; break;
+    case '03': id = 1; key = 'B'; base = 31 + 8; break;
+    case '08': id = 2; key = 'C'; base = 31 + 16; break;
   }
   gameStatus.nodes[id] = status;
   oled.fillRect(0, base, 127, 8, 0);
-  
+
   let current = '_';
   if (status.currentColor === '00') current = 'R';
   if (status.currentColor === '01') current = 'Y';
@@ -362,7 +363,7 @@ im.onDataReceived((data) => {
       [0, base + 2, 1], [1, base + 2, 1], [2, base + 2, 1], [3, base + 2, 0], [4, base + 2, 0],
       [0, base + 3, 1], [1, base + 3, 1], [2, base + 3, 1], [3, base + 3, 1], [4, base + 3, 1],
       [0, base + 4, 1], [1, base + 4, 1], [2, base + 4, 1], [3, base + 4, 0], [4, base + 4, 0],
-      [0, base + 5, 1], [1, base + 5, 0], [2, base + 5, 0], [3, base + 5, 0], [4, base + 5, 0],
+      [0, base + 5, 1], [1, base + 5, 0], [2, base + 5, 0], [3, base + 5, 0], [4, base + 5, 0]
     ]);
   } else {
     oled.drawPixel([
@@ -370,19 +371,18 @@ im.onDataReceived((data) => {
       [0, base + 2, 1], [1, base + 2, 1], [2, base + 2, 1], [3, base + 2, 1], [4, base + 2, 1],
       [0, base + 3, 1], [1, base + 3, 1], [2, base + 3, 1], [3, base + 3, 1], [4, base + 3, 1],
       [0, base + 4, 1], [1, base + 4, 1], [2, base + 4, 1], [3, base + 4, 1], [4, base + 4, 1],
-      [0, base + 5, 1], [1, base + 5, 1], [2, base + 5, 1], [3, base + 5, 1], [4, base + 5, 1],
+      [0, base + 5, 1], [1, base + 5, 1], [2, base + 5, 1], [3, base + 5, 1], [4, base + 5, 1]
     ]);
   }
-  oled.setCursor(8,base);
-  let rp = zeroPadding(Math.floor(status.teams.red.point/5), 4);
-  let yp = zeroPadding(Math.floor(status.teams.yellow.point/5), 4);
+  oled.setCursor(8, base);
+  let rp = zeroPadding(Math.floor(status.teams.red.point / 5), 4);
+  let yp = zeroPadding(Math.floor(status.teams.yellow.point / 5), 4);
   oled.writeString(font, 1, `${key}:${current} R:${rp} Y:${yp}`, 1, false);
-    
 });
 function fromHex (str) {
   if (Array.isArray(str)) {
     let s = '0x';
-    for (let i = str.length -1; i >= 0; --i) {
+    for (let i = str.length - 1; i >= 0; --i) {
       s += str[i];
     }
     return parseInt(s);
@@ -392,7 +392,7 @@ function fromHex (str) {
 }
 
 function sendStatusToNodes () {
-  let b = new Buffer(10);
+  let b = Buffer.alloc(10);
   b[0] = 0x00; // CMD_SEND_STATUS
   b.writeUInt32LE(gameStatus.remainingMs, 1); // 1-4
   b.writeUInt16LE(gameStatus.redScore, 5); // 5-6
@@ -408,7 +408,7 @@ function sendStatusToNodes () {
 function parseUart (data) {
   let t = data.split(':');
   if (t.length === 1) {
-    // TODO 
+    // TODO
     return;
   }
   let headers = t[0].split(',');
@@ -431,31 +431,31 @@ function parseUart (data) {
         point: fromHex([body[5], body[6]])
       }
     },
-    started: body[7] !== '00',
-    //clock: fromHex([body[8], body[9], body[10], body[11]])
+    started: body[7] !== '00'
+    // clock: fromHex([body[8], body[9], body[10], body[11]])
   };
   return out;
 }
 
+/*
 const shadow = awsIot.thingShadow({
-   keyPath: 'certs/domination-manager.private.key',
+  keyPath: 'certs/domination-manager.private.key',
   certPath: 'certs/domination-manager.cert.pem',
-    caPath: 'certs/root-CA.crt',
+  caPath: 'certs/root-CA.crt',
   clientId: 'domination-manager',
-      host: 'a3vm3lk3ajo7lu.iot.ap-northeast-1.amazonaws.com'
+  host: 'a3vm3lk3ajo7lu.iot.ap-northeast-1.amazonaws.com'
 });
 
 function publishStatus (status) {
   shadow.update('domination-manager', {state: {reported: status}});
 }
 
-shadow.on('connect', function() {
+shadow.on('connect', function () {
   //
   // After connecting to the AWS IoT platform, register interest in the
   // Thing Shadow named 'RGBLedLamp'.
   //
-  shadow.register( 'domination-manager', {}, function() {
-
+  shadow.register('domination-manager', {}, function () {
     // Once registration is complete, update the Thing Shadow named
     // 'RGBLedLamp' with the latest device state and save the clientToken
     // so that we can correlate it with status or timeout events.
@@ -470,13 +470,13 @@ shadow.on('connect', function() {
       }
     };
 
-    clientTokenUpdate = shadow.update('domination-manager', newState  );
+    clientTokenUpdate = shadow.update('domination-manager', newState );
     //
     // The update method returns a clientToken; if non-null, this value will
     // be sent in a 'status' event when the operation completes, allowing you
     // to know whether or not the update was successful.  If the update method
     // returns null, it's because another operation is currently in progress and
-    // you'll need to wait until it completes (or times out) before updating the 
+    // you'll need to wait until it completes (or times out) before updating the
     // shadow.
     //
     if (clientTokenUpdate === null) {
@@ -484,11 +484,11 @@ shadow.on('connect', function() {
     }
   });
 });
-shadow.on('status', 
-  function(thingName, stat, clientToken, stateObject) {
-    console.log('received '+stat+' on '+thingName+': ' + JSON.stringify(stateObject));
+shadow.on('status',
+  function (thingName, stat, clientToken, stateObject) {
+    console.log('received ' + stat + ' on ' + thingName + ': ' + JSON.stringify(stateObject));
     //
-    // These events report the status of update(), get(), and delete() 
+    // These events report the status of update(), get(), and delete()
     // calls.  The clientToken value associated with the event will have
     // the same value which was returned in an earlier call to get(),
     // update(), or delete().  Use status events to keep track of the
@@ -497,9 +497,9 @@ shadow.on('status',
   }
 );
 
-shadow.on('delta', 
-  function(thingName, stateObject) {
-    console.log('received delta on '+thingName+': '+
+shadow.on('delta',
+  function (thingName, stateObject) {
+    console.log('received delta on ' + thingName + ': ' +
                    JSON.stringify(stateObject));
     let desired = stateObject.state;
     if (desired) {
@@ -534,9 +534,9 @@ shadow.on('delta',
 );
 
 shadow.on('timeout',
-  function(thingName, clientToken) {
-    console.log('received timeout on '+thingName+
-                   ' with token: '+ clientToken);
+  function (thingName, clientToken) {
+    console.log('received timeout on ' + thingName +
+                   ' with token: ' + clientToken);
     //
     // In the event that a shadow operation times out, you'll receive
     // one of these events.  The clientToken value associated with the
@@ -545,26 +545,27 @@ shadow.on('timeout',
     //
   }
 );
+*/
 
-//UI component bindings
+// UI component bindings
 //
-pins.startNewGame.on('write', function(){
+pins.startNewGame.on('write', function () {
   gameStart();
 });
 
-pins.resetGame.on('write', function(){
+pins.resetGame.on('write', function () {
   gameReset();
 });
 
-pins.pauseGame.on('write', function(param){
-  if(!gameStatus.started){
+pins.pauseGame.on('write', function (param) {
+  if (!gameStatus.started) {
     console.log('you cannot pause before game start!');
     return;
   }
-  if(param == 0){
+  if (param === 0) {
     console.log('game resume');
     gameStart();
-  }else if(param == 1){
+  } else if (param === 1) {
     console.log('game pause');
     gamePause();
   }

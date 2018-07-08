@@ -1,9 +1,9 @@
 'use strict';
-const promisify = require('es6-promisify');
+// const promisify = require('es6-promisify');
 const SerialPort = require('serialport');
 
 class Command {
-  constructor(cmd, resolve, reject) {
+  constructor (cmd, resolve, reject) {
     this.cmd = cmd;
     this.resolve = resolve || console.log;
     this.reject = reject || console.error;
@@ -67,7 +67,7 @@ class Im920 {
   queue (cmd) {
     return new Promise((resolve, reject) => {
       let q = this.cmdQueue;
-      let c = new Command(cmd, resolve, reject)
+      let c = new Command(cmd, resolve, reject);
       c.state = 'queued';
       console.log(`queueing ${c.cmd}`);
       q.push(c);
@@ -219,9 +219,5 @@ class Im920 {
   parameterClear () {
     return this.queue(`PCLR`);
   }
-
-
-
-
 }
 module.exports = Im920;
