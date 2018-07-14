@@ -594,7 +594,7 @@ pins.resetGame.on('write', function () {
 
 pins.gameDurationConfig.on('write', (value) => {
   console.log('config time:', value);
-  gameStatus.totalSeconds += value;
+  gameStatus.totalSeconds = value;
   let ts = moment.duration(gameStatus.totalSeconds * 1000).format('mm:ss', { trim: false });
   pins.gameDurationDisplay.write(ts);
   gameControl('reset');
