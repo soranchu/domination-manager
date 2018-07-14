@@ -594,9 +594,11 @@ pins.resetGame.on('write', function () {
 
 pins.gameDurationConfig.on('write', (value) => {
   console.log('config time:', value);
+  gameControl('reset');
   gameStatus.totalSeconds += value;
   let ts = moment.duration(gameStatus.totalSeconds * 1000).format('mm:ss', { trim: false });
   pins.gameDurationDisplay.write(ts);
+  gameControl('reset');
 });
 
 pins.pauseGame.on('write', function (param) {
@@ -605,10 +607,10 @@ pins.pauseGame.on('write', function (param) {
     console.log('you cannot pause before game start!');
     return;
   }
-  if (param === 0) {
+  if (param === '0') {
     console.log('game resume');
     gameStart();
-  } else if (param === 1) {
+  } else if (param === '1') {
     console.log('game pause');
     gamePause();
   }
