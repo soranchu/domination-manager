@@ -317,6 +317,14 @@ function gameControl (state) {
       gameStatus.started = false;
       pins.status.write(GameStatusPinValuePaused);
       break;
+    case 'finish':
+      gameControlState = 'FINISH';
+      im.txData('02'); // game pause
+      // im.txData('02'); // game pause
+      // im.txData('02'); // game pause
+      gameStatus.started = false;
+      pins.status.write(GameStatusPinValueFinished);
+      break;
     case 'reset':
       gameControlState = 'RESET';
       im.txData('09'); // game reset
@@ -353,7 +361,7 @@ function gameReset () {
 }
 
 function gameFinish (notifyMessage) {
-  gameControl('pause');
+  gameControl('finish');
   gameStatus.remainingMs = 0;
   buzzer.writeSync(1);
   wait(10 * 1000).then(() => {
