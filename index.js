@@ -51,6 +51,11 @@ process.on('SIGINT', function () {
 //   reset: false
 // };
 
+const GameStatusPinValueStopped = 0;
+const GameStatusPinValueRunning = 1;
+const GameStatusPinValuePaused = 2;
+const GameStatusPinValueFinished = 3;
+
 // pin assignment
 const pins = {
   // game timer
@@ -77,7 +82,8 @@ const pins = {
 
   startNewGame: new blynk.VirtualPin(20),
   resetGame: new blynk.VirtualPin(21),
-  pauseGame: new blynk.VirtualPin(12)
+  pauseGame: new blynk.VirtualPin(12),
+  status: new blynk.VirtualPin(8)
 
   // TODO: NOT implemeted
   // gameDuration: new blynk.VirtualPin(9),
@@ -215,6 +221,7 @@ function updateStatus () {
         let winner = (redScore > yellowScore) ? 'RED' : 'YELLOW';
         notifyMessage = 'game finished! ' + winner + ' wins.';
       }
+      pins.status.write(GameStatusPinValueFinished);
       gameFinish(notifyMessage);
     } else {
       gameStatus.remainingMs -= diff;
@@ -299,6 +306,7 @@ function gameControl (state) {
       // im.txData('01'); // game start
       // im.txData('01'); // game start
       gameStatus.started = true;
+      pins.status.write(GameStatusPinValueRunning);
       lastTimestamp = new Date().getTime();
       break;
     case 'pause':
@@ -307,6 +315,7 @@ function gameControl (state) {
       // im.txData('02'); // game pause
       // im.txData('02'); // game pause
       gameStatus.started = false;
+      pins.status.write(GameStatusPinValuePaused);
       break;
     case 'reset':
       gameControlState = 'RESET';
@@ -323,6 +332,7 @@ function gameControl (state) {
       });
       pins.redScore.write(0);
       pins.yellowScore.write(0);
+      pins.status.write(GameStatusPinValueStopped);
       break;
   }
   oled.setCursor(90, 0);
