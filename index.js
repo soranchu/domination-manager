@@ -83,11 +83,11 @@ const pins = {
   startNewGame: new blynk.VirtualPin(20),
   resetGame: new blynk.VirtualPin(21),
   pauseGame: new blynk.VirtualPin(12),
-  status: new blynk.VirtualPin(8)
+  status: new blynk.VirtualPin(8),
 
   // TODO: NOT implemeted
-  // gameDuration: new blynk.VirtualPin(9),
-  // gameDurationConfig: new blynk.VirtualPin(11),
+  gameDurationDisplay: new blynk.VirtualPin(9),
+  gameDurationConfig: new blynk.VirtualPin(11)
 
 };
 
@@ -582,6 +582,13 @@ pins.startNewGame.on('write', function () {
 
 pins.resetGame.on('write', function () {
   gameReset();
+});
+
+pins.gameDurationConfig.on('write', (value) => {
+  console.log('config time:', value);
+  gameStatus.totalSeconds = value;
+  let ts = moment.duration(gameStatus.totalSeconds * 1000).format('mm:ss', { trim: false });
+  pins.gameDurationDisplay.write(ts);
 });
 
 pins.pauseGame.on('write', function (param) {
